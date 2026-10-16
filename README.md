@@ -45,17 +45,16 @@ have keep working.
 
 ## How it's built
 
-Two things drive most of the decisions here, and they're the two worth knowing
-before you read the code.
+Two things drive most of the decisions here.
 
 **The RFC's own vectors are the tests.** Appendix A and Appendix B are checked
 into the repository as data and asserted against the implementation. The
 specification ships its own acceptance criteria; there's no reason to invent
 different ones.
 
-**Time and randomness are seams, not ambient state.** Generation is reproducible
-under a fixed clock and a seeded random source, which is what makes those
-vectors testable and keeps behavior from drifting when someone refactors.
+**Time and randomness are inputs, not globals.** Generation is reproducible under
+a fixed clock and a seeded random source — that's what makes the vectors testable
+and keeps behavior from drifting when someone refactors.
 
 The fuller design record isn't published yet. It's being settled alongside the
 implementation and it's still moving — publish it now and it reads as a promise,

@@ -13,10 +13,10 @@ needs a strong argument, and the argument belongs in the pull request.
    Appendix B are the acceptance tests, and they are checked in as data before
    the code that satisfies them. A change that breaks a vector is wrong; a
    vector is never "updated to match" an implementation.
-2. **Determinism is a seam, not a hope.** No wall clock and no OS randomness is
-   read anywhere except inside the `Clock` and `Rng` implementations. Everything
-   downstream of those two traits is a pure function of its inputs, which is
-   what makes the vectors reproducible.
+2. **Determinism is enforced, not hoped for.** No wall clock and no OS randomness
+   is read anywhere except inside the `Clock` and `Rng` implementations.
+   Everything downstream of those two traits is a pure function of its inputs,
+   which is what makes the vectors reproducible.
 3. **The dependency set is deliberate.** Every dependency is a maintenance and
    supply-chain cost. `serde`/`serde_json`, `bs58` and `rand` were each declined
    with reasons; the design record has them. Adding a dependency needs an
