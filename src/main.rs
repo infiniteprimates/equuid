@@ -6,7 +6,7 @@ fn main() -> ExitCode {
     let cli_request = match cli::build_request(env::args_os()) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("{e}");
+            eprintln!("{e:?}");
             return ExitCode::FAILURE;
         }
     };
