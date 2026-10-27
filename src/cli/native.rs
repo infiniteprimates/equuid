@@ -1,14 +1,11 @@
 use std::ffi::OsString;
 
 use clap::Parser;
-use eyre::Result;
 
-use super::CliRequest;
+use super::{CliError, CliRequest};
 
-pub fn build_request(args_iter: impl Iterator<Item = impl Into<OsString> + Clone>) -> Result<CliRequest> {
+pub fn build_request(args_iter: impl Iterator<Item = impl Into<OsString> + Clone>) -> Result<CliRequest, CliError> {
     let _args = Args::try_parse_from(args_iter)?;
-
-    eprintln!("Processing native CLI.");
 
     Ok(CliRequest::V1 {})
 }
