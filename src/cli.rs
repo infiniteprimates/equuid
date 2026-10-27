@@ -50,9 +50,7 @@ fn get_program_name(program_path: &OsString) -> Option<String> {
 
 fn handle_clap_err(e: ClapError) -> Result<CliRequest, CliError> {
     match e.kind() {
-        ErrorKind::DisplayHelp
-        | ErrorKind::DisplayVersion
-        | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
+        ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
             Ok(CliRequest::DisplayInfo(e.render()))
         }
         _ => Err(CliError::ClapError(e)),
