@@ -6,8 +6,8 @@ fn main() -> ExitCode {
     let cli_request = match cli::build_request(env::args_os()) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("{e}");
-            return ExitCode::FAILURE;
+            anstream::eprintln!("{}", e.to_styled_string().ansi());
+            return ExitCode::from(2);
         }
     };
 
