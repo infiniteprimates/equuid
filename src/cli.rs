@@ -3,8 +3,21 @@ mod uuidgen;
 
 use std::{ffi::OsString, iter, path::Path};
 
+use anstyle::{AnsiColor, Effects, Style};
 use clap::{Error as ClapError, builder::StyledStr, error::ErrorKind};
 use thiserror::Error as ThisError;
+
+pub const BOLD_STYLE: Style = Style::new().effects(Effects::BOLD);
+pub const GREENBOLD_STYLE: Style = Style::new()
+    .fg_color(Some(anstyle::Color::Ansi(AnsiColor::Green)))
+    .effects(Effects::BOLD);
+pub const YELLOWBOLD_STYLE: Style = Style::new()
+    .fg_color(Some(anstyle::Color::Ansi(AnsiColor::Yellow)))
+    .effects(Effects::BOLD);
+pub const REDBOLD_STYLE: Style = Style::new()
+    .fg_color(Some(anstyle::Color::Ansi(AnsiColor::Red)))
+    .effects(Effects::BOLD);
+pub const RESET_STYLE: anstyle::Reset = anstyle::Reset;
 
 pub fn build_request(
     args_into_iter: impl IntoIterator<Item = impl Into<OsString> + Clone>,
@@ -12,15 +25,17 @@ pub fn build_request(
     let mut args_iter = args_into_iter.into_iter();
 
     let Some(program_path) = args_iter.next().map(|i| i.into()) else {
-        return Err(CliError::ProgramName(String::from(
-            "Unable to determine program name.",
-        )));
+        return Err(CliError::ProgramName {
+            msg: generate_error_styled_string("Missing program name."),
+            kind: ProgramNameErrorKind::Arg0Missing,
+        });
     };
 
     let Some(program_name) = get_program_name(&program_path) else {
-        return Err(CliError::ProgramName(String::from(
-            "Unable to determine program name format.",
-        )));
+        return Err(CliError::ProgramName {
+            msg: generate_error_styled_string("Invalid program name format."),
+            kind: ProgramNameErrorKind::Arg0UnknownFormat,
+        });
     };
 
     let restored_iter =
@@ -29,9 +44,10 @@ pub fn build_request(
     let cli_request = match program_name.as_str() {
         "equuid" => native::build_request(restored_iter),
         "uuidgen" => uuidgen::build_request(restored_iter),
-        actual_name => Err(CliError::ProgramName(format!(
-            "Unknown program name {actual_name}."
-        ))),
+        actual_name => Err(CliError::ProgramName {
+            msg: generate_error_styled_string(format!("Invalid program name {YELLOWBOLD_STYLE}{actual_name}{RESET_STYLE} -- must be {BOLD_STYLE}equuid{RESET_STYLE} or {BOLD_STYLE}uuidgen{RESET_STYLE}.").as_str()),
+            kind: ProgramNameErrorKind::Arg0InvalidName,
+        }),
     }
     .or_else(|cli_err| match cli_err {
         CliError::ClapError(clap_err) => handle_clap_err(clap_err),
@@ -57,6 +73,15 @@ fn handle_clap_err(e: ClapError) -> Result<CliRequest, CliError> {
     }
 }
 
+fn generate_error_styled_string(msg: &str) -> StyledStr {
+    let error_string = format!("{REDBOLD_STYLE}error:{RESET_STYLE} ");
+    let mut error_styled = StyledStr::from(error_string);
+
+    error_styled.push_str(msg);
+
+    error_styled
+}
+
 #[derive(Debug)]
 pub enum CliRequest {
     DisplayInfo(StyledStr),
@@ -71,10 +96,20 @@ pub enum CliRequest {
     Dissect {},
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ProgramNameErrorKind {
+    Arg0UnknownFormat,
+    Arg0Missing,
+    Arg0InvalidName,
+}
+
 #[derive(Debug, ThisError)]
 pub enum CliError {
-    #[error("Error processing program name: {0}")]
-    ProgramName(String),
+    #[error("Error processing program name: {}", msg.to_string())]
+    ProgramName {
+        msg: StyledStr,
+        kind: ProgramNameErrorKind,
+    },
     #[error("Error processing arguments: {}", .0.to_string())]
     ClapError(#[from] ClapError),
 }
@@ -82,7 +117,7 @@ pub enum CliError {
 impl CliError {
     pub fn to_styled_string(&self) -> StyledStr {
         match self {
-            CliError::ProgramName(s) => StyledStr::from(s),
+            CliError::ProgramName { msg, kind: _ } => msg.clone(),
             CliError::ClapError(e) => e.render(),
         }
     }
@@ -150,11 +185,16 @@ mod tests {
     fn an_unknown_program_name_names_the_program() {
         let error = build_request(argv(&["notaprog", "--help"])).unwrap_err();
         match error {
-            CliError::ProgramName(message) => {
+            CliError::ProgramName { msg, kind } => {
                 assert!(
-                    message.contains("notaprog"),
-                    "unexpected message: {message}"
-                )
+                    msg.to_string().contains("notaprog"),
+                    "unexpected message: {msg}"
+                );
+
+                assert!(
+                    kind == ProgramNameErrorKind::Arg0InvalidName,
+                    "unexpected kind: {kind:?}"
+                );
             }
             other => panic!("expected ProgramName, got {other:?}"),
         }
@@ -163,10 +203,15 @@ mod tests {
     #[test]
     fn an_empty_argv_is_a_program_name_error() {
         let error = build_request(argv(&[])).unwrap_err();
-        assert!(
-            matches!(error, CliError::ProgramName(_)),
-            "expected ProgramName, got {error:?}"
-        );
+        match error {
+            CliError::ProgramName { msg: _, kind } => {
+                assert!(
+                    kind == ProgramNameErrorKind::Arg0Missing,
+                    "unexpected kind: {kind:?}"
+                );
+            }
+            other => panic!("expected ProgramName, got {other:?}"),
+        }
     }
 
     /// Dispatch is by the name the binary was invoked under, so each name must
