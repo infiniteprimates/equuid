@@ -1,22 +1,53 @@
-use std::{env, process::ExitCode};
+use std::{
+    env,
+    io::Write,
+    ops::ControlFlow::{self, Break, Continue},
+    process::ExitCode,
+};
 
-use equuid::cli::{self, CliRequest};
+use clap::builder::StyledStr;
+use equuid::cli::{self, CliError, CliRequest};
 
 fn main() -> ExitCode {
-    let cli_request = match cli::build_request(env::args_os()) {
-        Ok(r) => r,
-        Err(e) => {
-            anstream::eprintln!("{}", e.to_styled_string().ansi());
-            return ExitCode::from(2);
+    let cli_result = translate_cli_result(cli::build_request(env::args_os()));
+    let cli_request = match cli_result {
+        Break(mut cli_exit) => {
+            writeln!(cli_exit.stream, "{}", cli_exit.msg.ansi()).unwrap_or_else(|err| {
+                eprintln!("Unable to write to output stream. {err}");
+                std::process::exit(2);
+            });
+            return cli_exit.exit_code;
         }
+        Continue(r) => r,
     };
 
-    if let CliRequest::DisplayInfo(styled_string) = cli_request {
-        anstream::println!("{}", styled_string.ansi());
-        return ExitCode::SUCCESS;
-    }
-
     println!("{cli_request:?}");
-
     ExitCode::SUCCESS
+}
+
+fn translate_cli_result(result: Result<CliRequest, CliError>) -> ControlFlow<CliExit, CliRequest> {
+    match result {
+        Ok(request) => {
+            if let CliRequest::DisplayInfo(msg) = request {
+                ControlFlow::Break(CliExit {
+                    msg,
+                    exit_code: ExitCode::SUCCESS,
+                    stream: Box::new(anstream::stdout()),
+                })
+            } else {
+                ControlFlow::Continue(request)
+            }
+        }
+        Err(e) => ControlFlow::Break(CliExit {
+            msg: e.to_styled_string(),
+            exit_code: ExitCode::from(2),
+            stream: Box::new(anstream::stderr()),
+        }),
+    }
+}
+
+pub struct CliExit {
+    pub exit_code: ExitCode,
+    pub msg: StyledStr,
+    pub stream: Box<dyn Write>,
 }

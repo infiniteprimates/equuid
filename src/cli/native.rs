@@ -4,9 +4,7 @@ use clap::Parser;
 
 use super::{CliError, CliRequest};
 
-pub fn build_request(
-    args_iter: impl Iterator<Item = impl Into<OsString> + Clone>,
-) -> Result<CliRequest, CliError> {
+pub fn build_request(args_iter: impl Iterator<Item = OsString>) -> Result<CliRequest, CliError> {
     let _args = Args::try_parse_from(args_iter)?;
 
     Ok(CliRequest::V1 {})
