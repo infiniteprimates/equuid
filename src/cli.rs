@@ -20,11 +20,11 @@ pub const REDBOLD_STYLE: Style = Style::new()
 pub const RESET_STYLE: anstyle::Reset = anstyle::Reset;
 
 pub fn build_request(
-    args_into_iter: impl IntoIterator<Item = impl Into<OsString> + Clone>,
+    args_into_iter: impl IntoIterator<Item = OsString>,
 ) -> Result<CliRequest, CliError> {
     let mut args_iter = args_into_iter.into_iter();
 
-    let Some(program_path) = args_iter.next().map(|i| i.into()) else {
+    let Some(program_path) = args_iter.next() else {
         return Err(CliError::ProgramName {
             msg: generate_error_styled_string("Missing program name."),
             kind: ProgramNameErrorKind::Arg0Missing,
@@ -38,8 +38,7 @@ pub fn build_request(
         });
     };
 
-    let restored_iter =
-        iter::once(OsString::from(&program_path)).chain(args_iter.map(|i| i.into()));
+    let restored_iter = iter::once(OsString::from(&program_path)).chain(args_iter);
 
     let cli_request = match program_name.as_str() {
         "equuid" => native::build_request(restored_iter),
