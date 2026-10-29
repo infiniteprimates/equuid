@@ -9,7 +9,11 @@ use clap::builder::StyledStr;
 use equuid::cli::{self, CliError, CliRequest};
 
 fn main() -> ExitCode {
-    let cli_result = translate_cli_result(cli::build_request(env::args_os()));
+    let cli_result = translate_cli_result(
+        cli::build_request(env::args_os()),
+        Box::new(anstream::stdout()),
+        Box::new(anstream::stderr()),
+    );
     let cli_request = match cli_result {
         Break(mut cli_exit) => {
             writeln!(cli_exit.stream, "{}", cli_exit.msg.ansi()).unwrap_or_else(|err| {
@@ -25,14 +29,18 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn translate_cli_result(result: Result<CliRequest, CliError>) -> ControlFlow<CliExit, CliRequest> {
+fn translate_cli_result(
+    result: Result<CliRequest, CliError>,
+    stdout: Box<dyn Write>,
+    stderr: Box<dyn Write>,
+) -> ControlFlow<CliExit, CliRequest> {
     match result {
         Ok(request) => {
             if let CliRequest::DisplayInfo(msg) = request {
                 ControlFlow::Break(CliExit {
                     msg,
                     exit_code: ExitCode::SUCCESS,
-                    stream: Box::new(anstream::stdout()),
+                    stream: stdout,
                 })
             } else {
                 ControlFlow::Continue(request)
@@ -41,7 +49,7 @@ fn translate_cli_result(result: Result<CliRequest, CliError>) -> ControlFlow<Cli
         Err(e) => ControlFlow::Break(CliExit {
             msg: e.to_styled_string(),
             exit_code: ExitCode::from(2),
-            stream: Box::new(anstream::stderr()),
+            stream: stderr,
         }),
     }
 }
