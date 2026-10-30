@@ -1,5 +1,8 @@
 use std::{
-    env, io::{self, Write}, ops::ControlFlow::{self, Break, Continue}, process::ExitCode,
+    env,
+    io::{self, Write},
+    ops::ControlFlow::{self, Break, Continue},
+    process::ExitCode,
 };
 
 use clap::builder::StyledStr;
@@ -10,8 +13,7 @@ fn main() -> ExitCode {
         out: &mut anstream::stdout(),
         err: &mut anstream::stderr(),
     };
-    let cli_result =
-        translate_cli_result(cli::build_request(env::args_os()));
+    let cli_result = translate_cli_result(cli::build_request(env::args_os()));
     let cli_request = match cli_result {
         Break(cli_exit) => {
             write_output(&cli_exit.msg, cli_exit.stream_kind, &mut streams).unwrap_or_else(|err| {
@@ -27,9 +29,7 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn translate_cli_result(
-    result: Result<CliRequest, CliError>,
-) -> ControlFlow<CliExit, CliRequest> {
+fn translate_cli_result(result: Result<CliRequest, CliError>) -> ControlFlow<CliExit, CliRequest> {
     match result {
         Ok(request) => {
             if let CliRequest::DisplayInfo(msg) = request {
@@ -50,14 +50,17 @@ fn translate_cli_result(
     }
 }
 
-fn write_output(output: &StyledStr, stream_kind: StreamKind, streams: &mut Streams) -> io::Result<()> {
+fn write_output(
+    output: &StyledStr,
+    stream_kind: StreamKind,
+    streams: &mut Streams,
+) -> io::Result<()> {
     let stream: &mut dyn Write = match stream_kind {
         StreamKind::Out => streams.out,
         StreamKind::Err => streams.err,
     };
 
     writeln!(stream, "{}", output.ansi())
-
 }
 
 pub struct CliExit {
@@ -71,7 +74,7 @@ pub enum StreamKind {
     Err,
 }
 
-pub struct Streams <'a> {
+pub struct Streams<'a> {
     out: &'a mut dyn Write,
     err: &'a mut dyn Write,
 }
