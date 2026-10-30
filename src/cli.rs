@@ -190,10 +190,7 @@ mod tests {
                     "unexpected message: {msg}"
                 );
 
-                assert!(
-                    kind == ProgramNameErrorKind::Arg0InvalidName,
-                    "unexpected kind: {kind:?}"
-                );
+                assert_eq!(kind, ProgramNameErrorKind::Arg0InvalidName);
             }
             other => panic!("expected ProgramName, got {other:?}"),
         }
