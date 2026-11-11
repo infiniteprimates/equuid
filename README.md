@@ -27,9 +27,8 @@ to `uuidgen` and takes the options util-linux's does, so the scripts you already
 have keep working.
 
 > **Status: pre-alpha, design phase.** There's no useful functionality or output
-> yet. The crate skeleton and app lands with the first code pull request. Nothing
-> here is usable, stable, or installable — watch the repository if you want to
-> follow along.
+> yet. Nothing here is usable, stable, or installable — watch the repository if
+> you want to stay up to date with the progress.
 
 ## What you'll be able to do
 
