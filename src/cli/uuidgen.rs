@@ -2,12 +2,12 @@ use std::ffi::OsString;
 
 use clap::Parser;
 
-use super::{CliError, CliRequest};
+use super::{CliError, UuidRequest};
 
-pub fn build_request(args_iter: impl Iterator<Item = OsString>) -> Result<CliRequest, CliError> {
+pub fn build_request(args_iter: impl Iterator<Item = OsString>) -> Result<UuidRequest, CliError> {
     let _args = Args::try_parse_from(args_iter)?;
 
-    Ok(CliRequest::V1 {})
+    Ok(UuidRequest::V1 {})
 }
 
 #[derive(Parser, Debug)]

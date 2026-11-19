@@ -1,82 +1,52 @@
 use std::{
-    env,
-    io::{self, Write},
-    ops::ControlFlow::{self, Break, Continue},
-    process::ExitCode,
+    env, ffi::OsString, io::{self, Write}, ops::ControlFlow::{self, Break, Continue}, process::ExitCode,
 };
 
+use equuid::cli::{self, CliError, CliInvocation, CliPersonality};
+use equuid::model::{UuidRequest, UuidResponse};
+
+use anyhow::Result;
 use clap::builder::StyledStr;
-use equuid::cli::{self, CliError, CliRequest};
+
+const EXIT_USAGE: u8 = 2;
 
 fn main() -> ExitCode {
-    let mut streams = Streams {
-        out: &mut anstream::stdout(),
-        err: &mut anstream::stderr(),
-    };
-    let cli_result = translate_cli_result(cli::build_request(env::args_os()));
-    let cli_request = match cli_result {
-        Break(cli_exit) => {
-            write_output(&cli_exit.msg, cli_exit.stream_kind, &mut streams).unwrap_or_else(|err| {
-                eprintln!("Unable to write to output stream. {err}");
-                std::process::exit(2);
-            });
-            return cli_exit.exit_code;
-        }
-        Continue(r) => r,
-    };
+    let args = env::args_os();
+    let invocation = cli::parse(args);
 
-    println!("{cli_request:?}");
-    ExitCode::SUCCESS
+    run(invocation)
 }
 
-fn translate_cli_result(result: Result<CliRequest, CliError>) -> ControlFlow<CliExit, CliRequest> {
-    match result {
-        Ok(request) => {
-            if let CliRequest::DisplayInfo(msg) = request {
-                ControlFlow::Break(CliExit {
-                    msg,
-                    exit_code: ExitCode::SUCCESS,
-                    stream_kind: StreamKind::Out,
-                })
-            } else {
-                ControlFlow::Continue(request)
-            }
-        }
-        Err(e) => ControlFlow::Break(CliExit {
-            msg: e.to_styled_string(),
-            exit_code: ExitCode::from(2),
-            stream_kind: StreamKind::Err,
-        }),
+fn run( invocation: CliInvocation) -> ExitCode {
+    let personality = invocation.personality;
+    let response = handle_request(invocation.result);
+
+    render(response, personality, invocation.streams);
+
+    exit_code(response, personality)
+}
+
+fn handle_request(request: std::result::Result<UuidRequest>) -> Result<UuidResponse> {
+    // TODO: fully implemented in future PR.
+    match invocation.result {
+        Ok(request) => Ok(UuidResponse::V1 {}),
+        Err(error) => error?
     }
 }
 
-fn write_output(
-    output: &StyledStr,
-    stream_kind: StreamKind,
-    streams: &mut Streams,
-) -> io::Result<()> {
-    let stream: &mut dyn Write = match stream_kind {
-        StreamKind::Out => streams.out,
-        StreamKind::Err => streams.err,
-    };
+fn exit_code(result: Result<UuidResponse>, personality: Option<CliPersonality>) -> ExitCode {
+    match result {
+        OK(_) => ExitCode::SUCCESS,
+        Err(error) => {
+            if let Some(cli_error) = error.downcast_ref::<CliError>() {
+                if let Some(CliPersonality::Native) = personality {
+                    return ExitCode::from(EXIT_USAGE);
+                }
+            }
 
-    writeln!(stream, "{}", output.ansi())
-}
-
-pub struct CliExit {
-    pub exit_code: ExitCode,
-    pub msg: StyledStr,
-    pub stream_kind: StreamKind,
-}
-
-pub enum StreamKind {
-    Out,
-    Err,
-}
-
-pub struct Streams<'a> {
-    out: &'a mut dyn Write,
-    err: &'a mut dyn Write,
+            ExitCode::FAILURE
+        }
+    }
 }
 
 #[cfg(test)]
@@ -85,18 +55,18 @@ mod tests {
 
     #[test]
     fn ok_non_display_info_cli_result_translates_into_continue() {
-        let cli_result = Ok(CliRequest::Dissect {});
+        let cli_result = Ok(UuidRequest::Dissect {});
         let Continue(cli_request) = translate_cli_result(cli_result) else {
             panic!("translate did not continue.")
         };
 
-        assert!(matches!(cli_request, CliRequest::Dissect {}));
+        assert!(matches!(cli_request, UuidRequest::Dissect {}));
     }
 
     #[test]
     fn ok_display_info_cli_result_translates_into_break_stdout_success() {
         let msg = "display info";
-        let cli_result = Ok(CliRequest::DisplayInfo(StyledStr::from(msg)));
+        let cli_result = Ok(UuidRequest::Info(StyledStr::from(msg)));
         let Break(cli_exit) = translate_cli_result(cli_result) else {
             panic!("translate did not break.")
         };
