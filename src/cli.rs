@@ -1,10 +1,14 @@
+pub mod io;
+
 mod native;
 mod uuidgen;
 
-use std::{ffi::OsString, iter, path::Path};
+use std::{ffi::OsString, io::Write, iter, path::Path};
+
+use crate::model::{UuidRequest};
 
 use anstyle::{AnsiColor, Effects, Style};
-use clap::{Error as ClapError, builder::StyledStr, error::ErrorKind};
+use clap::{Error as ClapError, builder::StyledStr, error::{ErrorKind, Result}};
 use thiserror::Error as ThisError;
 
 pub const BOLD_STYLE: Style = Style::new().effects(Effects::BOLD);
@@ -19,41 +23,65 @@ pub const REDBOLD_STYLE: Style = Style::new()
     .effects(Effects::BOLD);
 pub const RESET_STYLE: anstyle::Reset = anstyle::Reset;
 
-pub fn build_request(
+pub fn parse<'a>(
     args_into_iter: impl IntoIterator<Item = OsString>,
-) -> Result<CliRequest, CliError> {
+) -> CliInvocation<'a> {
+    let default_streams = Streams {
+        out: anstream::stdout(),
+        err: anstream::stderr(),
+    };
+
     let mut args_iter = args_into_iter.into_iter();
 
     let Some(program_path) = args_iter.next() else {
-        return Err(CliError::ProgramName {
-            msg: generate_error_styled_string("Missing program name."),
-            kind: ProgramNameErrorKind::Arg0Missing,
-        });
+        return CliInvocation {
+            personality: None,
+            result: Err(CliError::ProgramName {
+                msg: generate_error_styled_string("Missing program name."),
+                kind: ProgramNameErrorKind::Arg0Missing,
+            }),
+            streams: default_streams,
+        };
     };
 
     let Some(program_name) = get_program_name(&program_path) else {
-        return Err(CliError::ProgramName {
-            msg: generate_error_styled_string("Invalid program name format."),
-            kind: ProgramNameErrorKind::Arg0UnknownFormat,
-        });
+        return CliInvocation {
+            personality: None,
+            result: Err(CliError::ProgramName {
+                msg: generate_error_styled_string("Invalid program name format."),
+                kind: ProgramNameErrorKind::Arg0UnknownFormat,
+            }),
+            streams: default_streams,
+        };
+    };
+
+    let Some(personality) = CliPersonality::from_name(&program_name) else {
+        return CliInvocation {
+            personality: None,
+            result: Err(CliError::ProgramName {
+                msg: generate_error_styled_string(format!("Invalid program name {YELLOWBOLD_STYLE}{program_name}{RESET_STYLE} -- must be {BOLD_STYLE}equuid{RESET_STYLE} or {BOLD_STYLE}uuidgen{RESET_STYLE}.").as_str()),
+                kind: ProgramNameErrorKind::Arg0InvalidName,
+            }),
+            streams: default_streams,
+         };
     };
 
     let restored_iter = iter::once(OsString::from(&program_path)).chain(args_iter);
 
-    let cli_request = match program_name.as_str() {
-        "equuid" => native::build_request(restored_iter),
-        "uuidgen" => uuidgen::build_request(restored_iter),
-        actual_name => Err(CliError::ProgramName {
-            msg: generate_error_styled_string(format!("Invalid program name {YELLOWBOLD_STYLE}{actual_name}{RESET_STYLE} -- must be {BOLD_STYLE}equuid{RESET_STYLE} or {BOLD_STYLE}uuidgen{RESET_STYLE}.").as_str()),
-            kind: ProgramNameErrorKind::Arg0InvalidName,
-        }),
+    let result = match personality {
+        CliPersonality::Native => native::build_request(restored_iter),
+        CliPersonality::Uuidgen => uuidgen::build_request(restored_iter),
     }
     .or_else(|cli_err| match cli_err {
         CliError::ClapError(clap_err) => handle_clap_err(clap_err),
         _ => Err(cli_err),
-    })?;
+    });
 
-    Ok(cli_request)
+    CliInvocation {
+        personality: Some(personality),
+        result,
+        streams: default_streams,
+    }
 }
 
 fn get_program_name(program_path: &OsString) -> Option<String> {
@@ -63,10 +91,10 @@ fn get_program_name(program_path: &OsString) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-fn handle_clap_err(e: ClapError) -> Result<CliRequest, CliError> {
+fn handle_clap_err(e: ClapError) -> Result<UuidRequest, CliError> {
     match e.kind() {
         ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
-            Ok(CliRequest::DisplayInfo(e.render()))
+            Ok(UuidRequest::Info(e.render()))
         }
         _ => Err(CliError::ClapError(e)),
     }
@@ -81,19 +109,38 @@ fn generate_error_styled_string(msg: &str) -> StyledStr {
     error_styled
 }
 
-#[derive(Debug)]
-pub enum CliRequest {
-    DisplayInfo(StyledStr),
-    V1 {},
-    V2 {},
-    V3 {},
-    V4 {},
-    V5 {},
-    V6 {},
-    V7 {},
-    V8 {},
-    Dissect {},
+pub struct CliInvocation<'a> {
+    pub personality: Option<CliPersonality>,
+    pub result: Result<UuidRequest, CliError>,
+    pub streams: Streams<'a>,
 }
+
+pub enum StreamKind {
+    Out,
+    Err,
+}
+
+struct Streams<'a> {
+    out: &'a mut dyn Write,
+    err: &'a mut dyn Write,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum CliPersonality {
+    Native,
+    Uuidgen,
+}
+
+impl CliPersonality {
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "equuid" => Some(Self::Native),
+            "uuidgen" => Some(Self::Uuidgen),
+            _ => None,
+        }
+    }
+}
+
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ProgramNameErrorKind {
@@ -104,13 +151,15 @@ pub enum ProgramNameErrorKind {
 
 #[derive(Debug, ThisError)]
 pub enum CliError {
+    #[error("Error processing arguments: {}", .0.to_string())]
+    ClapError(#[from] ClapError),
     #[error("Error processing program name: {}", msg.to_string())]
     ProgramName {
         msg: StyledStr,
         kind: ProgramNameErrorKind,
     },
-    #[error("Error processing arguments: {}", .0.to_string())]
-    ClapError(#[from] ClapError),
+    #[error("Error validating arguments: {}", .0.to_string())]
+    ValidationError(StyledStr),
 }
 
 impl CliError {
@@ -118,6 +167,7 @@ impl CliError {
         match self {
             CliError::ProgramName { msg, kind: _ } => msg.clone(),
             CliError::ClapError(e) => e.render(),
+            CliError::ValidationError(msg) => msg.clone(),
         }
     }
 }
@@ -138,9 +188,9 @@ mod tests {
     /// rendering: `Display` strips styling, so `contains("Usage:")` matches. The
     /// styled form would interleave escape sequences inside the very words being
     /// matched, which is a property of the printer, not of the request.
-    fn displayed(request: CliRequest) -> String {
+    fn displayed(request: UuidRequest) -> String {
         match request {
-            CliRequest::DisplayInfo(text) => text.to_string(),
+            UuidRequest::Info(text) => text.to_string(),
             other => panic!("expected DisplayInfo, got {other:?}"),
         }
     }
@@ -151,38 +201,66 @@ mod tests {
 
     #[test]
     fn help_is_display_info_rather_than_an_error() {
-        let text = displayed(build_request(argv(&["equuid", "--help"])).unwrap());
+        let invocation = parse(argv(&["equuid", "--help"]));
+        let text = displayed(invocation.result.unwrap());
         assert!(
             text.contains("Usage: equuid"),
             "unexpected help text: {text}"
+        );
+        let Some(personality) = invocation.personality else {
+            panic!("unexpected personality: None")
+        };
+        assert_eq!(
+            personality,
+            CliPersonality::Native,
+            "unexpected personality {personality:?}",
         );
     }
 
     #[test]
     fn version_is_display_info_rather_than_an_error() {
-        let text = displayed(build_request(argv(&["equuid", "--version"])).unwrap());
+        let invocation = parse(argv(&["equuid", "--version"]));
+        let text = displayed(invocation.result.unwrap());
         // Read the version from the crate, not a literal: a release bump must not
         // turn this test red for the wrong reason.
         assert!(
             text.contains(env!("CARGO_PKG_VERSION")),
             "unexpected version text: {text}"
         );
+        let Some(personality) = invocation.personality else {
+            panic!("unexpected personality: None")
+        };
+        assert_eq!(
+            personality,
+            CliPersonality::Native,
+            "unexpected personality {personality:?}",
+        );
     }
 
     #[test]
     fn an_unknown_flag_is_a_clap_error() {
-        let error = build_request(argv(&["equuid", "--bogus"])).unwrap_err();
+        let invocation = parse(argv(&["equuid", "--bogus"]));
+        let error = invocation.result.unwrap_err();
         match error {
             CliError::ClapError(clap_error) => {
                 assert_eq!(clap_error.kind(), ErrorKind::UnknownArgument)
             }
             other => panic!("expected ClapError, got {other:?}"),
         }
+        let Some(personality) = invocation.personality else {
+            panic!("unexpected personality: None")
+        };
+        assert_eq!(
+            personality,
+            CliPersonality::Native,
+            "unexpected personality {personality:?}",
+        );
     }
 
     #[test]
     fn an_unknown_program_name_names_the_program() {
-        let error = build_request(argv(&["notaprog", "--help"])).unwrap_err();
+        let invocation = parse(argv(&["notaprog", "--help"]));
+        let error = invocation.result.unwrap_err();
         match error {
             CliError::ProgramName { msg, kind } => {
                 assert!(
@@ -194,11 +272,15 @@ mod tests {
             }
             other => panic!("expected ProgramName, got {other:?}"),
         }
+        if let Some(personality) = invocation.personality {
+            panic!("unexpected personality: {personality:?}")
+        };
     }
 
     #[test]
     fn an_empty_argv_is_a_program_name_error() {
-        let error = build_request(argv(&[])).unwrap_err();
+        let invocation = parse(argv(&[]));
+        let error = invocation.result.unwrap_err();
         match error {
             CliError::ProgramName { msg: _, kind } => {
                 assert!(
@@ -208,6 +290,9 @@ mod tests {
             }
             other => panic!("expected ProgramName, got {other:?}"),
         }
+        if let Some(personality) = invocation.personality {
+            panic!("unexpected personality: {personality:?}")
+        };
     }
 
     /// Dispatch is by the name the binary was invoked under, so each name must
@@ -215,14 +300,30 @@ mod tests {
     /// only that both succeed would still pass if both names hit one parser.
     #[test]
     fn the_program_name_selects_the_parser() {
-        let as_equuid = displayed(build_request(argv(&["equuid", "--help"])).unwrap());
-        let as_uuidgen = displayed(build_request(argv(&["uuidgen", "--help"])).unwrap());
+        let as_equuid = parse(argv(&["equuid", "--help"]));
+        let as_uuidgen = parse(argv(&["uuidgen", "--help"]));
 
-        assert!(
-            as_uuidgen.contains("uuidgen"),
-            "uuidgen help did not come from its own parser: {as_uuidgen}"
+        let Some(personality) = as_equuid.personality else {
+            panic!("unexpected equuid personality: None")
+        };
+        assert_eq!(
+            personality,
+            CliPersonality::Native,
+            "unexpected equuid personality {personality:?}",
         );
-        assert_ne!(as_equuid, as_uuidgen, "both names rendered the same help");
+
+        let Some(personality) = as_uuidgen.personality else {
+            panic!("unexpected uuidgen personality: None")
+        };
+        assert_eq!(
+            personality,
+            CliPersonality::Uuidgen,
+            "unexpected uuidgen personality {personality:?}",
+        );
+
+        let equuid_displayed = displayed(as_equuid.result.unwrap());
+        let uuidgen_displayed = displayed(as_uuidgen.result.unwrap());
+        assert_ne!(equuid_displayed, uuidgen_displayed, "both names rendered the same help");
     }
 
     /// Pins today's placeholder on purpose: a recognised name with no arguments
@@ -231,12 +332,12 @@ mod tests {
     #[test]
     fn a_bare_invocation_is_a_v1_request() {
         assert!(matches!(
-            build_request(argv(&["equuid"])).unwrap(),
-            CliRequest::V1 {}
+            parse(argv(&["equuid"])).result.unwrap(),
+            UuidRequest::V1 {}
         ));
         assert!(matches!(
-            build_request(argv(&["uuidgen"])).unwrap(),
-            CliRequest::V1 {}
+            parse(argv(&["uuidgen"])).result.unwrap(),
+            UuidRequest::V1 {}
         ));
     }
 }
