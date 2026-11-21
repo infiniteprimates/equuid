@@ -2,12 +2,23 @@ use std::ffi::OsString;
 
 use clap::Parser;
 
-use super::{CliError, UuidRequest};
+use super::{DEFAULT_OUTPUTS, CliError, CliInvocation, CliPersonality, UuidRequest};
 
-pub fn build_request(args_iter: impl Iterator<Item = OsString>) -> Result<UuidRequest, CliError> {
-    let _args = Args::try_parse_from(args_iter)?;
-
-    Ok(UuidRequest::V1 {})
+pub fn build_invocation(args_iter: impl Iterator<Item = OsString>) -> CliInvocation {
+    let parse_result = Args::try_parse_from(args_iter);
+    if let Ok(_args) = parse_result {
+        CliInvocation {
+            personality: Some(CliPersonality::Uuidgen),
+            result: Ok(UuidRequest::V1 {}),
+            output_targets: DEFAULT_OUTPUTS,
+        }
+    } else {
+        CliInvocation {
+            personality: Some(CliPersonality::Uuidgen),
+            result: Err(CliError::ClapError(parse_result.unwrap_err())),
+            output_targets: DEFAULT_OUTPUTS,
+        }
+    }
 }
 
 #[derive(Parser, Debug)]

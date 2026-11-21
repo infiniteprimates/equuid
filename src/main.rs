@@ -1,12 +1,11 @@
 use std::{
-    env, ffi::OsString, io::{self, Write}, ops::ControlFlow::{self, Break, Continue}, process::ExitCode,
+    env, fs::File, io::BufWriter, path::PathBuf, process::ExitCode,
 };
 
-use equuid::cli::{self, CliError, CliInvocation, CliPersonality};
+use equuid::cli::{self, CliError, CliInvocation, CliPersonality, Streams, io::render};
 use equuid::model::{UuidRequest, UuidResponse};
 
 use anyhow::Result;
-use clap::builder::StyledStr;
 
 const EXIT_USAGE: u8 = 2;
 
@@ -14,38 +13,68 @@ fn main() -> ExitCode {
     let args = env::args_os();
     let invocation = cli::parse(args);
 
-    run(invocation)
+    let mut out = match get_file_stream(invocation.output_targets.out.clone()) {
+        Err(error) => {
+            eprintln!("Failed to open output stream: {error}");
+            return ExitCode::FAILURE;
+        },
+        Ok(out_opt) => out_opt,
+    };
+
+    let mut err = match get_file_stream(invocation.output_targets.err.clone()) {
+        Err(error) => {
+            eprintln!("Failed to open error stream: {error}");
+            return ExitCode::FAILURE;
+        },
+        Ok(err_opt) => err_opt,
+    };
+
+    let streams = Streams {
+        out: match out.as_mut() {
+            Some(writer) => writer,
+            None => &mut anstream::stdout(),
+        },
+        err: match err.as_mut() {
+            Some(writer) => writer,
+            None => &mut anstream::stderr(),
+        },
+    };
+
+    run(invocation, streams)
 }
 
-fn run( invocation: CliInvocation) -> ExitCode {
-    let personality = invocation.personality;
-    let response = handle_request(invocation.result);
+fn run( invocation: CliInvocation, mut streams: Streams) -> ExitCode {
+    let CliInvocation{personality, result, output_targets: _ } = invocation;
+    let response = handle_request(result);
 
-    render(response, personality, invocation.streams);
+    if let Err(error) = render(&response, &personality, &mut streams) {
+        eprintln!("Failed to render output: {error}");
+        if let Some(_) = error.downcast_ref::<CliError>()
+            && let Some(CliPersonality::Native) = personality {
+                return ExitCode::from(EXIT_USAGE);
+            }
 
-    exit_code(response, personality)
+        return ExitCode::FAILURE
+    }
+
+    ExitCode::SUCCESS
 }
 
-fn handle_request(request: std::result::Result<UuidRequest>) -> Result<UuidResponse> {
+fn handle_request(result: Result<UuidRequest, CliError>) -> Result<UuidResponse> {
     // TODO: fully implemented in future PR.
-    match invocation.result {
-        Ok(request) => Ok(UuidResponse::V1 {}),
-        Err(error) => error?
+    let request = result?;
+
+    match request {
+        UuidRequest::Info(info) => Ok(UuidResponse::Info(info)),
+        _ => Ok(UuidResponse::V1{}),
+
     }
 }
 
-fn exit_code(result: Result<UuidResponse>, personality: Option<CliPersonality>) -> ExitCode {
-    match result {
-        OK(_) => ExitCode::SUCCESS,
-        Err(error) => {
-            if let Some(cli_error) = error.downcast_ref::<CliError>() {
-                if let Some(CliPersonality::Native) = personality {
-                    return ExitCode::from(EXIT_USAGE);
-                }
-            }
-
-            ExitCode::FAILURE
-        }
+fn get_file_stream(path_buf: Option<PathBuf>) -> Result<Option<BufWriter<File>>> {
+    match path_buf {
+        Some(path) => Ok(Some(BufWriter::new(File::open(path)?))),
+        None => Ok(None),
     }
 }
 

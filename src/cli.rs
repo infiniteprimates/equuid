@@ -3,7 +3,7 @@ pub mod io;
 mod native;
 mod uuidgen;
 
-use std::{ffi::OsString, io::Write, iter, path::Path};
+use std::{ffi::OsString, io::Write, iter, path::{Path, PathBuf}};
 
 use crate::model::{UuidRequest};
 
@@ -22,15 +22,14 @@ pub const REDBOLD_STYLE: Style = Style::new()
     .fg_color(Some(anstyle::Color::Ansi(AnsiColor::Red)))
     .effects(Effects::BOLD);
 pub const RESET_STYLE: anstyle::Reset = anstyle::Reset;
+pub const DEFAULT_OUTPUTS: OutputTargets = OutputTargets {
+    out: None,
+    err: None,
+};
 
-pub fn parse<'a>(
+pub fn parse(
     args_into_iter: impl IntoIterator<Item = OsString>,
-) -> CliInvocation<'a> {
-    let default_streams = Streams {
-        out: anstream::stdout(),
-        err: anstream::stderr(),
-    };
-
+) -> CliInvocation {
     let mut args_iter = args_into_iter.into_iter();
 
     let Some(program_path) = args_iter.next() else {
@@ -40,7 +39,7 @@ pub fn parse<'a>(
                 msg: generate_error_styled_string("Missing program name."),
                 kind: ProgramNameErrorKind::Arg0Missing,
             }),
-            streams: default_streams,
+            output_targets: DEFAULT_OUTPUTS,
         };
     };
 
@@ -51,7 +50,7 @@ pub fn parse<'a>(
                 msg: generate_error_styled_string("Invalid program name format."),
                 kind: ProgramNameErrorKind::Arg0UnknownFormat,
             }),
-            streams: default_streams,
+            output_targets: DEFAULT_OUTPUTS,
         };
     };
 
@@ -62,26 +61,18 @@ pub fn parse<'a>(
                 msg: generate_error_styled_string(format!("Invalid program name {YELLOWBOLD_STYLE}{program_name}{RESET_STYLE} -- must be {BOLD_STYLE}equuid{RESET_STYLE} or {BOLD_STYLE}uuidgen{RESET_STYLE}.").as_str()),
                 kind: ProgramNameErrorKind::Arg0InvalidName,
             }),
-            streams: default_streams,
+            output_targets: DEFAULT_OUTPUTS,
          };
     };
 
     let restored_iter = iter::once(OsString::from(&program_path)).chain(args_iter);
 
-    let result = match personality {
-        CliPersonality::Native => native::build_request(restored_iter),
-        CliPersonality::Uuidgen => uuidgen::build_request(restored_iter),
-    }
-    .or_else(|cli_err| match cli_err {
-        CliError::ClapError(clap_err) => handle_clap_err(clap_err),
-        _ => Err(cli_err),
-    });
+    let invocation = match personality {
+        CliPersonality::Native => native::build_invocation(restored_iter),
+        CliPersonality::Uuidgen => uuidgen::build_invocation(restored_iter),
+    };
 
-    CliInvocation {
-        personality: Some(personality),
-        result,
-        streams: default_streams,
-    }
+    translate_clap_error(invocation)
 }
 
 fn get_program_name(program_path: &OsString) -> Option<String> {
@@ -91,12 +82,18 @@ fn get_program_name(program_path: &OsString) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-fn handle_clap_err(e: ClapError) -> Result<UuidRequest, CliError> {
-    match e.kind() {
-        ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
-            Ok(UuidRequest::Info(e.render()))
+fn translate_clap_error(invocation: CliInvocation) -> CliInvocation {
+    if let Err(CliError::ClapError(error)) = &invocation.result {
+        match error.kind() {
+            ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => CliInvocation {
+                personality: invocation.personality,
+                result: Ok(UuidRequest::Info(error.render())),
+                output_targets: DEFAULT_OUTPUTS,
+            },
+            _ => invocation
         }
-        _ => Err(CliError::ClapError(e)),
+    } else {
+        invocation
     }
 }
 
@@ -109,10 +106,15 @@ fn generate_error_styled_string(msg: &str) -> StyledStr {
     error_styled
 }
 
-pub struct CliInvocation<'a> {
+pub struct CliInvocation {
     pub personality: Option<CliPersonality>,
     pub result: Result<UuidRequest, CliError>,
-    pub streams: Streams<'a>,
+    pub output_targets: OutputTargets
+}
+
+pub struct OutputTargets {
+    pub out: Option<PathBuf>,
+    pub err: Option<PathBuf>,
 }
 
 pub enum StreamKind {
@@ -120,9 +122,9 @@ pub enum StreamKind {
     Err,
 }
 
-struct Streams<'a> {
-    out: &'a mut dyn Write,
-    err: &'a mut dyn Write,
+pub struct Streams<'a> {
+    pub out: &'a mut dyn Write,
+    pub err: &'a mut dyn Write,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -151,14 +153,14 @@ pub enum ProgramNameErrorKind {
 
 #[derive(Debug, ThisError)]
 pub enum CliError {
-    #[error("Error processing arguments: {}", .0.to_string())]
+    #[error("{}", .0.render().ansi())]
     ClapError(#[from] ClapError),
-    #[error("Error processing program name: {}", msg.to_string())]
+    #[error("{}", msg.ansi())]
     ProgramName {
         msg: StyledStr,
         kind: ProgramNameErrorKind,
     },
-    #[error("Error validating arguments: {}", .0.to_string())]
+    #[error("{}", .0.ansi())]
     ValidationError(StyledStr),
 }
 
