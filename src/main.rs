@@ -1,6 +1,4 @@
-use std::{
-    env, fs::File, io::BufWriter, path::PathBuf, process::ExitCode,
-};
+use std::{env, fs::File, io::BufWriter, path::PathBuf, process::ExitCode};
 
 use equuid::cli::{self, CliError, CliInvocation, CliPersonality, Streams, io::render};
 use equuid::model::{UuidRequest, UuidResponse};
@@ -17,7 +15,7 @@ fn main() -> ExitCode {
         Err(error) => {
             eprintln!("Failed to open output stream: {error}");
             return ExitCode::FAILURE;
-        },
+        }
         Ok(out_opt) => out_opt,
     };
 
@@ -25,7 +23,7 @@ fn main() -> ExitCode {
         Err(error) => {
             eprintln!("Failed to open error stream: {error}");
             return ExitCode::FAILURE;
-        },
+        }
         Ok(err_opt) => err_opt,
     };
 
@@ -43,18 +41,23 @@ fn main() -> ExitCode {
     run(invocation, streams)
 }
 
-fn run( invocation: CliInvocation, mut streams: Streams) -> ExitCode {
-    let CliInvocation{personality, result, output_targets: _ } = invocation;
+fn run(invocation: CliInvocation, mut streams: Streams) -> ExitCode {
+    let CliInvocation {
+        personality,
+        result,
+        output_targets: _,
+    } = invocation;
     let response = handle_request(result);
 
     if let Err(error) = render(&response, &personality, &mut streams) {
         eprintln!("Failed to render output: {error}");
         if let Some(_) = error.downcast_ref::<CliError>()
-            && let Some(CliPersonality::Native) = personality {
-                return ExitCode::from(EXIT_USAGE);
-            }
+            && let Some(CliPersonality::Native) = personality
+        {
+            return ExitCode::from(EXIT_USAGE);
+        }
 
-        return ExitCode::FAILURE
+        return ExitCode::FAILURE;
     }
 
     ExitCode::SUCCESS
@@ -66,8 +69,7 @@ fn handle_request(result: Result<UuidRequest, CliError>) -> Result<UuidResponse>
 
     match request {
         UuidRequest::Info(info) => Ok(UuidResponse::Info(info)),
-        _ => Ok(UuidResponse::V1{}),
-
+        _ => Ok(UuidResponse::V1 {}),
     }
 }
 

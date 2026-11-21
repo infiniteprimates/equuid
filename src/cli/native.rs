@@ -2,7 +2,7 @@ use std::ffi::OsString;
 
 use clap::Parser;
 
-use super::{DEFAULT_OUTPUTS, CliError, CliInvocation, CliPersonality, UuidRequest};
+use super::{CliError, CliInvocation, CliPersonality, DEFAULT_OUTPUTS, UuidRequest};
 
 pub fn build_invocation(args_iter: impl Iterator<Item = OsString>) -> CliInvocation {
     let parse_result = Args::try_parse_from(args_iter);
