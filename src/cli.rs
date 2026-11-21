@@ -3,12 +3,21 @@ pub mod io;
 mod native;
 mod uuidgen;
 
-use std::{ffi::OsString, io::Write, iter, path::{Path, PathBuf}};
+use std::{
+    ffi::OsString,
+    io::Write,
+    iter,
+    path::{Path, PathBuf},
+};
 
-use crate::model::{UuidRequest};
+use crate::model::UuidRequest;
 
 use anstyle::{AnsiColor, Effects, Style};
-use clap::{Error as ClapError, builder::StyledStr, error::{ErrorKind, Result}};
+use clap::{
+    Error as ClapError,
+    builder::StyledStr,
+    error::{ErrorKind, Result},
+};
 use thiserror::Error as ThisError;
 
 pub const BOLD_STYLE: Style = Style::new().effects(Effects::BOLD);
@@ -27,9 +36,7 @@ pub const DEFAULT_OUTPUTS: OutputTargets = OutputTargets {
     err: None,
 };
 
-pub fn parse(
-    args_into_iter: impl IntoIterator<Item = OsString>,
-) -> CliInvocation {
+pub fn parse(args_into_iter: impl IntoIterator<Item = OsString>) -> CliInvocation {
     let mut args_iter = args_into_iter.into_iter();
 
     let Some(program_path) = args_iter.next() else {
@@ -90,7 +97,7 @@ fn translate_clap_error(invocation: CliInvocation) -> CliInvocation {
                 result: Ok(UuidRequest::Info(error.render())),
                 output_targets: DEFAULT_OUTPUTS,
             },
-            _ => invocation
+            _ => invocation,
         }
     } else {
         invocation
@@ -109,7 +116,7 @@ fn generate_error_styled_string(msg: &str) -> StyledStr {
 pub struct CliInvocation {
     pub personality: Option<CliPersonality>,
     pub result: Result<UuidRequest, CliError>,
-    pub output_targets: OutputTargets
+    pub output_targets: OutputTargets,
 }
 
 pub struct OutputTargets {
@@ -142,7 +149,6 @@ impl CliPersonality {
         }
     }
 }
-
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ProgramNameErrorKind {
@@ -325,7 +331,10 @@ mod tests {
 
         let equuid_displayed = displayed(as_equuid.result.unwrap());
         let uuidgen_displayed = displayed(as_uuidgen.result.unwrap());
-        assert_ne!(equuid_displayed, uuidgen_displayed, "both names rendered the same help");
+        assert_ne!(
+            equuid_displayed, uuidgen_displayed,
+            "both names rendered the same help"
+        );
     }
 
     /// Pins today's placeholder on purpose: a recognised name with no arguments
