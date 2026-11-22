@@ -7,15 +7,18 @@ use anyhow::{Error, Result};
 use clap::builder::StyledStr;
 
 pub fn render(
-    result: &Result<UuidResponse>,
+    result: Result<UuidResponse>,
     _personality: &Option<CliPersonality>,
     streams: &mut Streams,
 ) -> Result<()> {
     // TODO: This is just a stub. The body of this will be completely replaced
     // as the CLI is implemented.
     match result {
-        Ok(response) => emit(&render_response(response), StreamKind::Out, streams),
-        Err(error) => emit(&render_error(error), StreamKind::Err, streams),
+        Ok(response) => emit(&render_response(&response), StreamKind::Out, streams),
+        Err(error) => {
+            emit(&render_error(&error), StreamKind::Err, streams)?;
+            Err(error)
+        },
     }
 }
 

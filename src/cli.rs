@@ -95,7 +95,7 @@ fn translate_clap_error(invocation: CliInvocation) -> CliInvocation {
             ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => CliInvocation {
                 personality: invocation.personality,
                 result: Ok(UuidRequest::Info(error.render())),
-                output_targets: DEFAULT_OUTPUTS,
+                output_targets: invocation.output_targets,
             },
             _ => invocation,
         }
