@@ -351,4 +351,41 @@ mod tests {
             UuidRequest::V1 {}
         ));
     }
+
+    /// Dispatch reads the file *stem*, so a Windows binary name still reaches its
+    /// own parser. Reverting to `file_name()` turns this red, which is the point.
+    #[test]
+    fn a_windows_style_program_name_dispatches_by_its_stem() {
+        let invocation = parse(argv(&["equuid.exe", "--help"]));
+
+        let Some(personality) = invocation.personality else {
+            panic!("unexpected personality: None")
+        };
+        assert_eq!(
+            personality,
+            CliPersonality::Native,
+            "unexpected personality {personality:?}",
+        );
+        displayed(invocation.result.unwrap());
+    }
+
+    /// Any single extension is stripped, not just `.exe` — a deliberate choice,
+    /// not an accident of the API. Pinned so narrowing it later is a decision.
+    #[test]
+    fn one_extension_is_stripped_whatever_it_is() {
+        let invocation = parse(argv(&["uuidgen.sh", "--bogus"]));
+
+        let Some(personality) = invocation.personality else {
+            panic!("unexpected personality: None")
+        };
+        assert_eq!(
+            personality,
+            CliPersonality::Uuidgen,
+            "unexpected personality {personality:?}",
+        );
+        assert!(
+            matches!(invocation.result, Err(CliError::ClapError(_))),
+            "expected the uuidgen parser to reject --bogus"
+        );
+    }
 }
