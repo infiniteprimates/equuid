@@ -81,7 +81,7 @@ fn handle_request(result: Result<UuidRequest, CliError>) -> Result<UuidResponse>
 
 fn get_file_stream(path_buf: Option<PathBuf>) -> Result<Option<BufWriter<File>>> {
     match path_buf {
-        Some(path) => Ok(Some(BufWriter::new(File::create_new(path)?))),
+        Some(path) => Ok(Some(BufWriter::new(File::create(path)?))),
         None => Ok(None),
     }
 }
