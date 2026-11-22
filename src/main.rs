@@ -1,5 +1,6 @@
-use std::{env, fs::File, io::{BufWriter, Write}, path::PathBuf, process::ExitCode};
+use std::{env, fs::File, io::Write, path::PathBuf, process::ExitCode};
 
+use anstream::AutoStream;
 use equuid::cli::{self, CliError, CliInvocation, CliPersonality, Streams, io::render};
 use equuid::model::{UuidRequest, UuidResponse};
 
@@ -50,7 +51,9 @@ fn run(invocation: CliInvocation, mut streams: Streams) -> ExitCode {
     let handle_response = handle_request(result);
 
     let is_error = handle_response.as_ref().is_err();
-    let is_cli_error = handle_response.as_ref().is_err_and(|e| e.downcast_ref::<CliError>().is_some());
+    let is_cli_error = handle_response
+        .as_ref()
+        .is_err_and(|e| e.downcast_ref::<CliError>().is_some());
 
     if let Err(error) = render(handle_response, &personality, &mut streams) {
         writeln!(anstream::stderr(), "Failed to render output: {error}").unwrap();
@@ -79,9 +82,9 @@ fn handle_request(result: Result<UuidRequest, CliError>) -> Result<UuidResponse>
     }
 }
 
-fn get_file_stream(path_buf: Option<PathBuf>) -> Result<Option<BufWriter<File>>> {
+fn get_file_stream(path_buf: Option<PathBuf>) -> Result<Option<AutoStream<File>>> {
     match path_buf {
-        Some(path) => Ok(Some(BufWriter::new(File::create(path)?))),
+        Some(path) => Ok(Some(AutoStream::auto(File::create(path)?))),
         None => Ok(None),
     }
 }
