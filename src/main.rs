@@ -1,3 +1,4 @@
+use std::io::BufWriter;
 use std::{env, fs::File, io::Write, path::PathBuf, process::ExitCode};
 
 use anstream::AutoStream;
@@ -82,9 +83,14 @@ fn handle_request(result: Result<UuidRequest, CliError>) -> Result<UuidResponse>
     }
 }
 
-fn get_file_stream(path_buf: Option<PathBuf>) -> Result<Option<AutoStream<File>>> {
+fn get_file_stream(path_buf: Option<PathBuf>) -> Result<Option<Box<dyn Write>>> {
     match path_buf {
-        Some(path) => Ok(Some(AutoStream::auto(File::create(path)?))),
+        Some(path) => {
+            let file = File::create(path)?;
+            let stream = AutoStream::auto(file);
+            let buffered = BufWriter::new(stream);
+            Ok(Some(Box::new(buffered)))
+        }
         None => Ok(None),
     }
 }
