@@ -49,7 +49,7 @@ fn run(invocation: CliInvocation, mut streams: Streams) -> ExitCode {
     } = invocation;
     let response = handle_request(result);
 
-    if let Err(error) = render(&response, &personality, &mut streams) {
+    if let Err(error) = render(response, &personality, &mut streams) {
         eprintln!("Failed to render output: {error}");
         if let Some(_) = error.downcast_ref::<CliError>()
             && let Some(CliPersonality::Native) = personality
@@ -75,7 +75,7 @@ fn handle_request(result: Result<UuidRequest, CliError>) -> Result<UuidResponse>
 
 fn get_file_stream(path_buf: Option<PathBuf>) -> Result<Option<BufWriter<File>>> {
     match path_buf {
-        Some(path) => Ok(Some(BufWriter::new(File::open(path)?))),
+        Some(path) => Ok(Some(BufWriter::new(File::create_new(path)?))),
         None => Ok(None),
     }
 }
