@@ -84,7 +84,7 @@ pub fn parse(args_into_iter: impl IntoIterator<Item = OsString>) -> CliInvocatio
 
 fn get_program_name(program_path: &OsString) -> Option<String> {
     Path::new(&program_path)
-        .file_name()
+        .file_stem()
         .and_then(|os| os.to_str())
         .map(|s| s.to_string())
 }
