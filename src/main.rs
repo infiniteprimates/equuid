@@ -1,4 +1,4 @@
-use std::{env, fs::File, io::BufWriter, path::PathBuf, process::ExitCode};
+use std::{env, fs::File, io::{BufWriter, Write}, path::PathBuf, process::ExitCode};
 
 use equuid::cli::{self, CliError, CliInvocation, CliPersonality, Streams, io::render};
 use equuid::model::{UuidRequest, UuidResponse};
@@ -47,12 +47,18 @@ fn run(invocation: CliInvocation, mut streams: Streams) -> ExitCode {
         result,
         output_targets: _,
     } = invocation;
-    let response = handle_request(result);
+    let handle_response = handle_request(result);
 
-    if let Err(error) = render(response, &personality, &mut streams) {
-        eprintln!("Failed to render output: {error}");
-        if let Some(_) = error.downcast_ref::<CliError>()
-            && let Some(CliPersonality::Native) = personality
+    let is_error = handle_response.as_ref().is_err();
+    let is_cli_error = handle_response.as_ref().is_err_and(|e| e.downcast_ref::<CliError>().is_some());
+
+    if let Err(error) = render(handle_response, &personality, &mut streams) {
+        writeln!(anstream::stderr(), "Failed to render output: {error}").unwrap();
+    }
+
+    if is_error {
+        if let Some(CliPersonality::Native) = personality
+            && is_cli_error
         {
             return ExitCode::from(EXIT_USAGE);
         }
