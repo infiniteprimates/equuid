@@ -17,7 +17,7 @@ pub fn render(
         Ok(response) => emit(&render_response(&response), StreamKind::Out, streams),
         Err(error) => {
             emit(&render_error(&error), StreamKind::Err, streams)?;
-            Err(error)
+            Ok(())
         },
     }
 }
