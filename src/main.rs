@@ -149,20 +149,6 @@ mod tests {
         CliError::ClapError(clap::Error::raw(kind, msg))
     }
 
-    /// Compare `ExitCode`s through `Debug`.
-    ///
-    /// `ExitCode` exposes no way to read its value back, so building the
-    /// expected code and comparing is the whole assertion. Debug is used rather
-    /// than `==` to keep this compiling regardless of the trait impls std
-    /// carries for `ExitCode`.
-    fn assert_exit_code(actual: ExitCode, expected: ExitCode, case: &str) {
-        assert_eq!(
-            format!("{actual:?}"),
-            format!("{expected:?}"),
-            "wrong exit code for {case}"
-        );
-    }
-
     // --- exit codes -------------------------------------------------------
     //
     // Three-way by design: equuid's usage errors exit 2 (util-linux parity is
@@ -179,7 +165,7 @@ mod tests {
             )),
         ));
 
-        assert_exit_code(code, ExitCode::from(EXIT_USAGE), "equuid usage error");
+        assert_eq!(code, ExitCode::from(EXIT_USAGE), "unexpected exit code");
         assert!(out.is_empty(), "usage error wrote to stdout: {out}");
         assert!(err.contains("unexpected argument"), "no message: {err}");
     }
@@ -194,7 +180,7 @@ mod tests {
             )),
         ));
 
-        assert_exit_code(code, ExitCode::FAILURE, "uuidgen usage error");
+        assert_eq!(code, ExitCode::FAILURE, "unexpected exit code");
         assert!(out.is_empty(), "usage error wrote to stdout: {out}");
         assert!(err.contains("unexpected argument"), "no message: {err}");
     }
@@ -207,7 +193,7 @@ mod tests {
         let error = cli::parse([std::ffi::OsString::from("notaprog"), "help".into()]);
         let (code, out, err) = run_captured(error);
 
-        assert_exit_code(code, ExitCode::FAILURE, "bad program name");
+        assert_eq!(code, ExitCode::FAILURE, "unexpected exit code");
         assert!(out.is_empty(), "program-name error wrote to stdout: {out}");
         assert!(err.contains("Invalid program name"), "no message: {err}");
     }
@@ -219,7 +205,7 @@ mod tests {
             Ok(UuidRequest::V1 {}),
         ));
 
-        assert_exit_code(code, ExitCode::SUCCESS, "bare invocation");
+        assert_eq!(code, ExitCode::SUCCESS, "unexpected exit code");
         assert_eq!(out, "V1\n");
         assert!(err.is_empty(), "success wrote to stderr: {err}");
     }
@@ -231,7 +217,7 @@ mod tests {
             "--help".into(),
         ]));
 
-        assert_exit_code(code, ExitCode::SUCCESS, "help");
+        assert_eq!(code, ExitCode::SUCCESS, "unexpected exit code");
         assert!(out.contains("Usage: equuid"), "no help on stdout: {out}");
         assert!(err.is_empty(), "help wrote to stderr: {err}");
     }
