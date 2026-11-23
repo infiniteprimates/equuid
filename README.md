@@ -26,9 +26,9 @@ It's a drop-in replacement too, not just an alternative. The same binary answers
 to `uuidgen` and takes the options util-linux's does, so the scripts you already
 have keep working.
 
-> **Status: pre-alpha, design phase.** There's no code yet. The crate skeleton
-> lands with the first code pull request. Nothing here is usable, stable, or
-> installable — watch the repository if you want to follow along.
+> **Status: pre-alpha, design phase.** There's no useful functionality or output
+> yet. Nothing here is usable, stable, or installable — watch the repository if
+> you want to stay up to date with the progress.
 
 ## What you'll be able to do
 
